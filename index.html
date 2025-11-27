@@ -86,7 +86,15 @@
             }
             return best.endsWith('s') ? best : `1/${Math.round(1/time)}s`;
         };
-        const formatFNumber = (f) => f ? `f/${f}` : '';
+
+        // UPDATED: Logic làm tròn số F-Number
+        const formatFNumber = (f) => {
+            if (!f) return '';
+            // Làm tròn 1 chữ số thập phân (1.779 -> 1.8)
+            const val = Math.round(f * 10) / 10;
+            return `f/${val}`;
+        };
+
         const formatISO = (iso) => iso ? `ISO ${iso}` : '';
         const cleanModelName = (make, model) => {
             const m = String(make || '').replace(/\0/g, '').trim();
@@ -116,7 +124,6 @@
             const [activeTab, setActiveTab] = useState('layout');
             const [libsLoaded, setLibsLoaded] = useState(false);
             
-            // Tùy chỉnh mặc định: Luôn bật fixedRatioMode (ẩn khỏi UI nhưng vẫn hoạt động ngầm)
             const [settings, setSettings] = useState({
                 borderWidthPercent: 15,
                 bottomPaddingPercent: 20,
@@ -163,7 +170,6 @@
             const processSingleImage = async (imgItem) => {
                 setImages(prev => prev.map(img => img.id === imgItem.id ? { ...img, status: 'processing' } : img));
                 
-                // --- Đọc EXIF từ Binary ---
                 let extractedExif = null;
                 try {
                     const arrayBuffer = await new Promise((resolve, reject) => {
@@ -186,7 +192,6 @@
                     }
                 } catch (err) { console.error("EXIF error", err); }
 
-                // --- Vẽ lên Canvas ---
                 return new Promise((resolve) => {
                     const originalImg = new Image();
                     originalImg.crossOrigin = "Anonymous";
@@ -197,7 +202,6 @@
                         const finalCtx = finalCanvas.getContext('2d');
                         if (finalCtx) {
                             drawFrameOnCanvas(finalCanvas, finalCtx, originalImg, extractedExif || {}, settings);
-                            // Chất lượng ảnh đầu ra cao nhất (1.0)
                             const finalUrl = finalCanvas.toDataURL('image/jpeg', 1.0);
                             setImages(prev => prev.map(p => p.id === imgItem.id ? { ...p, finalUrl, exif: extractedExif, status: 'done' } : p));
                         }
@@ -212,7 +216,6 @@
 
             const reProcessAll = () => { if(images.length > 0) processQueue(images); };
 
-            // --- CORE DRAWING (Chỉ còn logic Tỉ lệ chuẩn) ---
             const drawFrameOnCanvas = (canvas, ctx, sourceImg, exif, cfg) => {
                 const sourceW = sourceImg.naturalWidth || sourceImg.width;
                 const sourceH = sourceImg.naturalHeight || sourceImg.height;
@@ -221,7 +224,6 @@
                 const shortSide = Math.min(sourceW, sourceH);
                 const baseP = Math.floor(shortSide * (cfg.borderWidthPercent / 100));
                 
-                // Mặc định Tỉ lệ chuẩn (4:5 hoặc 5:4)
                 const isLandscape = sourceW > sourceH;
                 const targetRatio = isLandscape ? 5/4 : 4/5; 
                 let wOut = sourceW + (baseP * 2);
@@ -238,14 +240,13 @@
                     sideP = baseP;
                     bottomP = calcBottom; 
                 } else {
-                    // Nếu thiếu chỗ cho viền dưới, mở rộng canvas theo chiều cao
                     let hOutFixed = sourceH + baseP + minBottomRequired;
                     let wOutFixed = hOutFixed * targetRatio;
                     canvasH = hOutFixed;
                     canvasW = wOutFixed;
                     topP = baseP;
                     bottomP = minBottomRequired;
-                    sideP = (canvasW - sourceW) / 2; // Cân giữa theo chiều ngang
+                    sideP = (canvasW - sourceW) / 2;
                 }
                 
                 canvas.width = canvasW;
@@ -364,7 +365,9 @@
                         {images.length === 0 ? (
                             <div className="flex flex-col items-center justify-center h-[60vh] text-gray-400 border-2 border-dashed border-gray-300 rounded-2xl bg-white/50" onClick={() => libsLoaded && document.querySelector('input[type=file]')?.click()}>
                                 <Icons.ImageIcon className="w-12 h-12 mb-3 text-gray-300" />
-                                <p className="font-medium">{libsLoaded ? "Chạm để thêm ảnh" : "Đang tải thư viện..."}</p>
+                                <p className="font-medium">
+                                    {libsLoaded ? "Chạm để thêm ảnh" : "Đang tải thư viện..."}
+                                </p>
                             </div>
                         ) : (
                             <div className="flex flex-col gap-6">
