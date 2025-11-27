@@ -5,13 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Bluer Exif Frame</title>
     
-    <!-- PWA Settings -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Bluer Frame">
     <meta name="theme-color" content="#ffffff">
 
-    <!-- Icon -->
     <link rel="apple-touch-icon" href="./icon.png">
     <link rel="icon" type="image/png" href="./icon.png">
 
@@ -45,56 +43,15 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // --- DATABASE CROP FACTOR (Thư viện thông minh) ---
-        // Key: Một phần tên Model (viết thường) -> Value: Hệ số Crop
+        // --- DATABASE CROP FACTOR ---
         const CAMERA_DB = {
-            // --- SONY ---
-            'rx100': 2.7,   // Dòng RX100 (1-inch)
-            'zv-1': 2.7,    // ZV-1 (1-inch)
-            'rx10': 2.7,    // RX10 (1-inch)
-            'rx1': 1.0,     // RX1 (Fullframe)
-            
-            // --- CANON ---
-            'g7 x': 2.7,    // G7X series (1-inch)
-            'g5 x': 2.7,    // G5X series
-            'g9 x': 2.7,    // G9X series
-            's100': 4.6,    // S100/S110/S120 (1/1.7")
-            's110': 4.6,
-            's120': 4.6,
-            'ixus': 5.6,    // Dòng IXUS sensor nhỏ
-            
-            // --- RICOH ---
-            'gr ii': 1.5,   // GR APS-C
-            'gr iii': 1.5,
-            'gr digital': 4.6, // GR Digital cũ (sensor nhỏ)
-            'cx': 5.6,      // Dòng CX (CX1 -> CX6) sensor 1/2.3"
-            'caplio': 5.6,  // Caplio cũ
-            
-            // --- FUJIFILM ---
-            'x100': 1.5,    // X100 series (APS-C)
-            'x-': 1.5,      // Các dòng X-T, X-Pro, X-E (APS-C)
-            'gfx': 0.79,    // Medium Format (Ngược lại, tiêu cự ngắn hơn)
-            'x10': 3.9,     // X10/X20/X30 (2/3")
-            'x20': 3.9,
-            'x30': 3.9,
-            
-            // --- PANASONIC / LUMIX ---
-            'lx100': 2.2,   // Multi-aspect sensor (gần M43)
-            'lx10': 2.7,    // 1-inch
-            'lx15': 2.7,
-            'tz': 5.6,      // Dòng Travel Zoom
-            'zs': 5.6,
-            
-            // --- OLYMPUS ---
-            'tg-': 5.6,     // Tough series
-            'xz-': 4.7,     // XZ-1/2
-            
-            // --- NIKON ---
-            'coolpix a': 1.5, // APS-C compact
-            'p900': 5.6,
-            'p1000': 5.6,
-            '1 j': 2.7,     // Nikon 1 series (CX format)
-            '1 v': 2.7,
+            'rx100': 2.7, 'zv-1': 2.7, 'rx10': 2.7, 'rx1': 1.0,
+            'g7 x': 2.7, 'g5 x': 2.7, 'g9 x': 2.7, 's100': 4.6, 's110': 4.6, 's120': 4.6, 'ixus': 5.6,
+            'gr ii': 1.5, 'gr iii': 1.5, 'gr digital': 4.6, 'cx': 5.6, 'caplio': 5.6,
+            'x100': 1.5, 'x-': 1.5, 'gfx': 0.79, 'x10': 3.9, 'x20': 3.9, 'x30': 3.9,
+            'lx100': 2.2, 'lx10': 2.7, 'lx15': 2.7, 'tz': 5.6, 'zs': 5.6,
+            'tg-': 5.6, 'xz-': 4.7,
+            'coolpix a': 1.5, 'p900': 5.6, 'p1000': 5.6, '1 j': 2.7, '1 v': 2.7,
         };
 
         // --- Icons ---
@@ -112,10 +69,11 @@
             Share: (p) => <Icon {...p} path="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8 M16 6l-4-4-4 4 M12 2v13" />,
             AlertCircle: (p) => <Icon {...p} path="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />,
             FolderDown: (p) => <Icon {...p} path="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z M12 11v6 M9 14l3 3 3-3" />,
-            Loader2: (p) => <svg className={`${p.className} animate-spin`} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
+            Loader2: (p) => <svg className={`${p.className} animate-spin`} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>,
+            Info: (p) => <Icon {...p} path="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
         };
 
-        // --- Helper Functions ---
+        // --- Helpers ---
         const formatExposureTime = (time) => {
             if (!time) return '';
             if (time >= 1) return time.toString();
@@ -130,44 +88,35 @@
         };
         const formatFNumber = (f) => f ? `f/${f}` : '';
         const formatISO = (iso) => iso ? `ISO ${iso}` : '';
-        const cleanModelName = (make = '', model = '') => {
-            const m = make.replace(/\0/g, '').trim();
-            let mo = model.replace(/\0/g, '').trim();
+        const cleanModelName = (make, model) => {
+            const m = String(make || '').replace(/\0/g, '').trim();
+            let mo = String(model || '').replace(/\0/g, '').trim();
             if (mo.toLowerCase().startsWith(m.toLowerCase())) mo = mo.substring(m.length).trim();
             return `${m} ${mo}`.trim();
         };
-
-        // --- LOGIC QUY ĐỔI THÔNG MINH (SMART LOGIC) ---
-        const formatFocalLength = (fl, fl35, make = '', model = '') => {
-            // 1. Ưu tiên tuyệt đối: Tag có sẵn trong ảnh
+        const formatFocalLength = (fl, fl35, make, model) => {
             if (fl35 && fl35 > 0) return `${Math.round(fl35)}mm`;
-            
-            // 2. Nếu không có tag, dùng thuật toán tra cứu
             if (fl) {
-                const mStr = (make + ' ' + model).toLowerCase();
-                
-                // A. Tra cứu trong Database
+                const mStr = (String(make || '') + ' ' + String(model || '')).toLowerCase();
                 for (const [key, factor] of Object.entries(CAMERA_DB)) {
-                    if (mStr.includes(key)) {
-                        return `${Math.round(fl * factor)}mm`;
-                    }
+                    if (mStr.includes(key)) return `${Math.round(fl * factor)}mm`;
                 }
-
-                // B. Fallback theo hãng (cho các máy DSLR/Mirrorless phổ thông)
                 if (mStr.includes('fujifilm') || mStr.includes('nikon') || mStr.includes('sony')) return `${Math.round(fl * 1.5)}mm`;
                 if (mStr.includes('olympus') || mStr.includes('panasonic')) return `${Math.round(fl * 2.0)}mm`;
                 if (mStr.includes('canon')) return `${Math.round(fl * 1.6)}mm`;
-
-                // C. Không tìm thấy thông tin, trả về số gốc
                 return `${Math.round(fl)}mm`;
             }
             return '';
         };
 
+        // --- MAIN APP ---
         function App() {
             const [images, setImages] = useState([]);
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
             const [activeTab, setActiveTab] = useState('layout');
+            const [libsLoaded, setLibsLoaded] = useState(false);
+            
+            // Tùy chỉnh mặc định: Luôn bật fixedRatioMode (ẩn khỏi UI nhưng vẫn hoạt động ngầm)
             const [settings, setSettings] = useState({
                 borderWidthPercent: 15,
                 bottomPaddingPercent: 20,
@@ -179,6 +128,16 @@
                 fontFamily: 'Montserrat, sans-serif',
                 watermarkText: '',
             });
+
+            useEffect(() => {
+                const checkLibs = setInterval(() => {
+                    if (window.EXIF) {
+                        setLibsLoaded(true);
+                        clearInterval(checkLibs);
+                    }
+                }, 100);
+                return () => clearInterval(checkLibs);
+            }, []);
 
             const handleFileUpload = (e) => {
                 if (e.target.files && e.target.files.length > 0) {
@@ -203,64 +162,106 @@
 
             const processSingleImage = async (imgItem) => {
                 setImages(prev => prev.map(img => img.id === imgItem.id ? { ...img, status: 'processing' } : img));
+                
+                // --- Đọc EXIF từ Binary ---
+                let extractedExif = null;
+                try {
+                    const arrayBuffer = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = e => resolve(e.target.result);
+                        reader.onerror = reject;
+                        reader.readAsArrayBuffer(imgItem.file);
+                    });
+
+                    if (window.EXIF) {
+                        const tags = window.EXIF.readFromBinaryFile(arrayBuffer);
+                        if (tags && (tags.Make || tags.Model || tags.FocalLength)) {
+                            extractedExif = {
+                                Make: tags.Make, Model: tags.Model, FNumber: tags.FNumber,
+                                ExposureTime: tags.ExposureTime, ISOSpeedRatings: tags.ISOSpeedRatings,
+                                FocalLength: tags.FocalLength, FocalLengthIn35mmFilm: tags.FocalLengthIn35mmFilm,
+                                DateTimeOriginal: tags.DateTimeOriginal,
+                            };
+                        }
+                    }
+                } catch (err) { console.error("EXIF error", err); }
+
+                // --- Vẽ lên Canvas ---
                 return new Promise((resolve) => {
                     const originalImg = new Image();
                     originalImg.crossOrigin = "Anonymous";
                     originalImg.src = imgItem.previewUrl;
+                    
                     originalImg.onload = () => {
-                        const draw = (exifData) => {
-                            const finalCanvas = document.createElement('canvas');
-                            const finalCtx = finalCanvas.getContext('2d');
-                            if (finalCtx) {
-                                drawFrameOnCanvas(finalCanvas, finalCtx, originalImg, exifData, settings);
-                                const finalUrl = finalCanvas.toDataURL('image/jpeg', 0.95);
-                                setImages(prev => prev.map(p => p.id === imgItem.id ? { ...p, finalUrl, exif: exifData, status: 'done' } : p));
-                            }
-                            resolve();
-                        };
-                        if (window.EXIF) {
-                            window.EXIF.getData(originalImg, function() {
-                                const allTags = window.EXIF.getAllTags(this);
-                                const exifData = {
-                                    Make: allTags?.Make, 
-                                    Model: allTags?.Model, 
-                                    FNumber: allTags?.FNumber,
-                                    ExposureTime: allTags?.ExposureTime, 
-                                    ISOSpeedRatings: allTags?.ISOSpeedRatings,
-                                    FocalLength: allTags?.FocalLength,
-                                    FocalLengthIn35mmFilm: allTags?.FocalLengthIn35mmFilm,
-                                    DateTimeOriginal: allTags?.DateTimeOriginal,
-                                };
-                                draw(exifData);
-                            });
-                        } else { draw({}); }
+                        const finalCanvas = document.createElement('canvas');
+                        const finalCtx = finalCanvas.getContext('2d');
+                        if (finalCtx) {
+                            drawFrameOnCanvas(finalCanvas, finalCtx, originalImg, extractedExif || {}, settings);
+                            // Chất lượng ảnh đầu ra cao nhất (1.0)
+                            const finalUrl = finalCanvas.toDataURL('image/jpeg', 1.0);
+                            setImages(prev => prev.map(p => p.id === imgItem.id ? { ...p, finalUrl, exif: extractedExif, status: 'done' } : p));
+                        }
+                        resolve();
                     };
+                    originalImg.onerror = () => {
+                        setImages(prev => prev.map(p => p.id === imgItem.id ? { ...p, status: 'error' } : p));
+                        resolve();
+                    }
                 });
             };
 
             const reProcessAll = () => { if(images.length > 0) processQueue(images); };
 
+            // --- CORE DRAWING (Chỉ còn logic Tỉ lệ chuẩn) ---
             const drawFrameOnCanvas = (canvas, ctx, sourceImg, exif, cfg) => {
                 const sourceW = sourceImg.naturalWidth || sourceImg.width;
                 const sourceH = sourceImg.naturalHeight || sourceImg.height;
                 if (!sourceW || !sourceH) return;
+
                 const shortSide = Math.min(sourceW, sourceH);
-                const borderSize = Math.floor(shortSide * (cfg.borderWidthPercent / 100));
-                const bottomPadding = Math.floor(shortSide * (cfg.bottomPaddingPercent / 100));
+                const baseP = Math.floor(shortSide * (cfg.borderWidthPercent / 100));
                 
-                canvas.width = sourceW + (borderSize * 2);
-                canvas.height = sourceH + borderSize + bottomPadding;
+                // Mặc định Tỉ lệ chuẩn (4:5 hoặc 5:4)
+                const isLandscape = sourceW > sourceH;
+                const targetRatio = isLandscape ? 5/4 : 4/5; 
+                let wOut = sourceW + (baseP * 2);
+                let hOut = wOut / targetRatio;
+                let calcBottom = hOut - sourceH - baseP;
+                const minBottomRequired = Math.floor(shortSide * (cfg.bottomPaddingPercent / 100));
+
+                let canvasW, canvasH, topP, bottomP, sideP;
+
+                if (calcBottom >= minBottomRequired) {
+                    canvasW = wOut;
+                    canvasH = hOut;
+                    topP = baseP;
+                    sideP = baseP;
+                    bottomP = calcBottom; 
+                } else {
+                    // Nếu thiếu chỗ cho viền dưới, mở rộng canvas theo chiều cao
+                    let hOutFixed = sourceH + baseP + minBottomRequired;
+                    let wOutFixed = hOutFixed * targetRatio;
+                    canvasH = hOutFixed;
+                    canvasW = wOutFixed;
+                    topP = baseP;
+                    bottomP = minBottomRequired;
+                    sideP = (canvasW - sourceW) / 2; // Cân giữa theo chiều ngang
+                }
+                
+                canvas.width = canvasW;
+                canvas.height = canvasH;
 
                 ctx.fillStyle = cfg.backgroundColor;
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(sourceImg, borderSize, borderSize, sourceW, sourceH);
+                ctx.drawImage(sourceImg, Math.floor(sideP), Math.floor(topP), sourceW, sourceH);
 
                 ctx.fillStyle = cfg.textColor;
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 const baseFontSize = shortSide * 0.035; 
+                
+                const bottomAreaCenterY = topP + sourceH + (bottomP / 2);
                 const centerX = canvas.width / 2;
-                const bottomAreaY = borderSize + sourceH + (bottomPadding / 2);
 
                 let mainText = "";
                 let subText = "";
@@ -277,17 +278,18 @@
                     subText = parts.join('  •  ');
                 }
                 if (cfg.showDate && exif.DateTimeOriginal) {
-                    const datePart = exif.DateTimeOriginal.split(' ')[0].replace(/:/g, '/');
-                    subText = subText ? `${subText}   |   ${datePart}` : datePart;
+                    const datePart = String(exif.DateTimeOriginal || '').split(' ')[0].replace(/:/g, '/');
+                    if (datePart.length > 5) subText = subText ? `${subText}   |   ${datePart}` : datePart;
                 }
+                
                 ctx.font = `700 ${baseFontSize}px ${cfg.fontFamily}`;
                 if (subText) {
-                    ctx.fillText(mainText, centerX, bottomAreaY - (baseFontSize * 0.6));
+                    ctx.fillText(mainText, centerX, bottomAreaCenterY - (baseFontSize * 0.6));
                     ctx.font = `500 ${baseFontSize * 0.7}px ${cfg.fontFamily}`;
                     ctx.globalAlpha = 0.85;
-                    ctx.fillText(subText, centerX, bottomAreaY + (baseFontSize * 0.6));
+                    ctx.fillText(subText, centerX, bottomAreaCenterY + (baseFontSize * 0.6));
                 } else {
-                    ctx.fillText(mainText, centerX, bottomAreaY);
+                    ctx.fillText(mainText, centerX, bottomAreaCenterY);
                 }
             };
 
@@ -352,37 +354,36 @@
                             <Icons.Camera className="w-6 h-6 text-blue-600" />
                             <h1 className="text-lg font-bold">Bluer Exif Frame</h1>
                         </div>
-                        <label className="bg-blue-600 active:bg-blue-700 text-white p-2 rounded-full flex items-center justify-center shadow-sm cursor-pointer">
-                            <Icons.Upload className="w-5 h-5" />
-                            <input type="file" multiple accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleFileUpload} />
+                        <label className={`bg-blue-600 text-white p-2 rounded-full flex items-center justify-center shadow-sm transition-all ${libsLoaded ? 'cursor-pointer active:bg-blue-700' : 'opacity-50 cursor-not-allowed'}`}>
+                            {libsLoaded ? <Icons.Upload className="w-5 h-5" /> : <Icons.Loader2 className="w-5 h-5" />}
+                            <input type="file" multiple accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleFileUpload} disabled={!libsLoaded} />
                         </label>
                     </header>
 
                     <main className="flex-1 overflow-y-auto p-4 pb-32">
                         {images.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-[60vh] text-gray-400 border-2 border-dashed border-gray-300 rounded-2xl bg-white/50" onClick={() => document.querySelector('input[type=file]')?.click()}>
+                            <div className="flex flex-col items-center justify-center h-[60vh] text-gray-400 border-2 border-dashed border-gray-300 rounded-2xl bg-white/50" onClick={() => libsLoaded && document.querySelector('input[type=file]')?.click()}>
                                 <Icons.ImageIcon className="w-12 h-12 mb-3 text-gray-300" />
-                                <p className="font-medium">Chạm để thêm ảnh</p>
+                                <p className="font-medium">{libsLoaded ? "Chạm để thêm ảnh" : "Đang tải thư viện..."}</p>
                             </div>
                         ) : (
                             <div className="flex flex-col gap-6">
                                 <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-start gap-2">
-                                    <Icons.AlertCircle className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                                    <Icons.Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
                                     <p className="text-xs text-blue-800 leading-snug">Mẹo: Chọn <b>Lưu hình ảnh</b> khi chia sẻ để lưu về Photos.</p>
                                 </div>
                                 {images.map((img) => (
-                                    <div key={img.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                                    <div key={img.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
                                         <div className="relative bg-gray-100 flex items-center justify-center min-h-[200px]">
-                                            {img.status === 'processing' && (
-                                                <div className="absolute inset-0 bg-white/80 z-10 flex items-center justify-center">
-                                                    <Icons.Loader2 className="w-8 h-8 text-blue-600" />
-                                                </div>
-                                            )}
+                                            {img.status === 'processing' && <div className="absolute inset-0 bg-white/80 z-10 flex items-center justify-center"><Icons.Loader2 className="w-8 h-8 text-blue-600" /></div>}
                                             <img src={img.finalUrl || img.previewUrl} className={`w-full h-auto object-contain ${!img.finalUrl ? 'opacity-50' : ''}`} />
                                         </div>
                                         <div className="p-3">
                                             <div className="flex justify-between items-center mb-3">
-                                                <p className="text-xs font-bold truncate max-w-[70%] text-gray-700">{img.file.name}</p>
+                                                <div className="flex-1 overflow-hidden mr-2">
+                                                    <p className="text-xs font-bold truncate text-gray-700">{img.file.name}</p>
+                                                    {img.status === 'done' && !img.exif && <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded mt-1 border border-amber-100"><Icons.AlertCircle className="w-3 h-3" /> Không tìm thấy EXIF</span>}
+                                                </div>
                                                 <button onClick={() => setImages(prev => prev.filter(i => i.id !== img.id))} className="text-gray-400 p-2 -mr-2 active:text-red-500"><Icons.Trash2 className="w-5 h-5" /></button>
                                             </div>
                                             <button onClick={() => handleShareOrSaveSingle(img)} disabled={!img.finalUrl} className="w-full bg-white border border-gray-200 text-gray-900 hover:bg-gray-50 py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 active:scale-95 transition-transform"><Icons.Share className="w-4 h-4" /> Lưu / Chia sẻ</button>
@@ -416,7 +417,7 @@
                                     {activeTab === 'layout' && (
                                         <div className="space-y-6">
                                             <div><div className="flex justify-between mb-2"><span className="text-sm font-medium">Độ dày viền</span><span className="text-xs bg-gray-100 px-2 py-1 rounded">{settings.borderWidthPercent}%</span></div><input type="range" min="0" max="30" value={settings.borderWidthPercent} onChange={(e) => setSettings({...settings, borderWidthPercent: Number(e.target.value)})} className="w-full h-8 bg-gray-200 rounded-lg appearance-none accent-blue-600 cursor-pointer" /></div>
-                                            <div><div className="flex justify-between mb-2"><span className="text-sm font-medium">Khoảng dưới</span><span className="text-xs bg-gray-100 px-2 py-1 rounded">{settings.bottomPaddingPercent}%</span></div><input type="range" min="5" max="50" value={settings.bottomPaddingPercent} onChange={(e) => setSettings({...settings, bottomPaddingPercent: Number(e.target.value)})} className="w-full h-8 bg-gray-200 rounded-lg appearance-none accent-blue-600 cursor-pointer" /></div>
+                                            <div><div className="flex justify-between mb-2"><span className="text-sm font-medium">Khoảng dưới (Min)</span><span className="text-xs bg-gray-100 px-2 py-1 rounded">{settings.bottomPaddingPercent}%</span></div><input type="range" min="5" max="50" value={settings.bottomPaddingPercent} onChange={(e) => setSettings({...settings, bottomPaddingPercent: Number(e.target.value)})} className="w-full h-8 bg-gray-200 rounded-lg appearance-none accent-blue-600 cursor-pointer" /></div>
                                         </div>
                                     )}
                                     {activeTab === 'color' && (
