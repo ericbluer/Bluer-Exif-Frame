@@ -5,21 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Bluer Exif Frame</title>
     
-    <!-- === CẤU HÌNH PWA CHO IPHONE === -->
+    <!-- PWA Settings -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Bluer Frame">
     <meta name="theme-color" content="#ffffff">
 
-    <!-- === CẤU HÌNH ICON MỚI === -->
-    <!-- App sẽ tự động tìm file icon.png nằm cùng thư mục -->
+    <!-- Icon -->
     <link rel="apple-touch-icon" href="./icon.png">
     <link rel="icon" type="image/png" href="./icon.png">
 
-    <!-- Tailwind CSS -->
+    <!-- Tailwind & Libs -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- React & Libraries -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -27,9 +24,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
     <style>
-        /* Tối ưu riêng cho iOS */
         body {
-            overscroll-behavior-y: none; /* Chặn kéo nảy trang */
+            overscroll-behavior-y: none;
             -webkit-tap-highlight-color: transparent;
             font-family: -apple-system, BlinkMacSystemFont, "Montserrat", "Segoe UI", Roboto, sans-serif;
             padding-top: env(safe-area-inset-top);
@@ -40,7 +36,6 @@
             display: flex;
             flex-direction: column;
         }
-        /* Font chữ Montserrat */
         @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700&display=swap');
     </style>
 </head>
@@ -50,7 +45,59 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // --- Bộ Icon ---
+        // --- DATABASE CROP FACTOR (Thư viện thông minh) ---
+        // Key: Một phần tên Model (viết thường) -> Value: Hệ số Crop
+        const CAMERA_DB = {
+            // --- SONY ---
+            'rx100': 2.7,   // Dòng RX100 (1-inch)
+            'zv-1': 2.7,    // ZV-1 (1-inch)
+            'rx10': 2.7,    // RX10 (1-inch)
+            'rx1': 1.0,     // RX1 (Fullframe)
+            
+            // --- CANON ---
+            'g7 x': 2.7,    // G7X series (1-inch)
+            'g5 x': 2.7,    // G5X series
+            'g9 x': 2.7,    // G9X series
+            's100': 4.6,    // S100/S110/S120 (1/1.7")
+            's110': 4.6,
+            's120': 4.6,
+            'ixus': 5.6,    // Dòng IXUS sensor nhỏ
+            
+            // --- RICOH ---
+            'gr ii': 1.5,   // GR APS-C
+            'gr iii': 1.5,
+            'gr digital': 4.6, // GR Digital cũ (sensor nhỏ)
+            'cx': 5.6,      // Dòng CX (CX1 -> CX6) sensor 1/2.3"
+            'caplio': 5.6,  // Caplio cũ
+            
+            // --- FUJIFILM ---
+            'x100': 1.5,    // X100 series (APS-C)
+            'x-': 1.5,      // Các dòng X-T, X-Pro, X-E (APS-C)
+            'gfx': 0.79,    // Medium Format (Ngược lại, tiêu cự ngắn hơn)
+            'x10': 3.9,     // X10/X20/X30 (2/3")
+            'x20': 3.9,
+            'x30': 3.9,
+            
+            // --- PANASONIC / LUMIX ---
+            'lx100': 2.2,   // Multi-aspect sensor (gần M43)
+            'lx10': 2.7,    // 1-inch
+            'lx15': 2.7,
+            'tz': 5.6,      // Dòng Travel Zoom
+            'zs': 5.6,
+            
+            // --- OLYMPUS ---
+            'tg-': 5.6,     // Tough series
+            'xz-': 4.7,     // XZ-1/2
+            
+            // --- NIKON ---
+            'coolpix a': 1.5, // APS-C compact
+            'p900': 5.6,
+            'p1000': 5.6,
+            '1 j': 2.7,     // Nikon 1 series (CX format)
+            '1 v': 2.7,
+        };
+
+        // --- Icons ---
         const Icon = ({ path, className }) => (
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d={path} /></svg>
         );
@@ -68,7 +115,7 @@
             Loader2: (p) => <svg className={`${p.className} animate-spin`} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
         };
 
-        // --- Helpers ---
+        // --- Helper Functions ---
         const formatExposureTime = (time) => {
             if (!time) return '';
             if (time >= 1) return time.toString();
@@ -89,19 +136,34 @@
             if (mo.toLowerCase().startsWith(m.toLowerCase())) mo = mo.substring(m.length).trim();
             return `${m} ${mo}`.trim();
         };
-        const formatFocalLength = (fl, fl35, make = '') => {
+
+        // --- LOGIC QUY ĐỔI THÔNG MINH (SMART LOGIC) ---
+        const formatFocalLength = (fl, fl35, make = '', model = '') => {
+            // 1. Ưu tiên tuyệt đối: Tag có sẵn trong ảnh
             if (fl35 && fl35 > 0) return `${Math.round(fl35)}mm`;
+            
+            // 2. Nếu không có tag, dùng thuật toán tra cứu
             if (fl) {
-                const m = make.toLowerCase();
-                if (m.includes('fujifilm') || m.includes('nikon') || m.includes('sony')) return `${Math.round(fl * 1.5)}mm`;
-                if (m.includes('olympus') || m.includes('panasonic')) return `${Math.round(fl * 2.0)}mm`;
-                if (m.includes('canon')) return `${Math.round(fl * 1.6)}mm`;
+                const mStr = (make + ' ' + model).toLowerCase();
+                
+                // A. Tra cứu trong Database
+                for (const [key, factor] of Object.entries(CAMERA_DB)) {
+                    if (mStr.includes(key)) {
+                        return `${Math.round(fl * factor)}mm`;
+                    }
+                }
+
+                // B. Fallback theo hãng (cho các máy DSLR/Mirrorless phổ thông)
+                if (mStr.includes('fujifilm') || mStr.includes('nikon') || mStr.includes('sony')) return `${Math.round(fl * 1.5)}mm`;
+                if (mStr.includes('olympus') || mStr.includes('panasonic')) return `${Math.round(fl * 2.0)}mm`;
+                if (mStr.includes('canon')) return `${Math.round(fl * 1.6)}mm`;
+
+                // C. Không tìm thấy thông tin, trả về số gốc
                 return `${Math.round(fl)}mm`;
             }
             return '';
         };
 
-        // --- Main App ---
         function App() {
             const [images, setImages] = useState([]);
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -160,9 +222,13 @@
                             window.EXIF.getData(originalImg, function() {
                                 const allTags = window.EXIF.getAllTags(this);
                                 const exifData = {
-                                    Make: allTags?.Make, Model: allTags?.Model, FNumber: allTags?.FNumber,
-                                    ExposureTime: allTags?.ExposureTime, ISOSpeedRatings: allTags?.ISOSpeedRatings,
-                                    FocalLength: allTags?.FocalLength, FocalLengthIn35mmFilm: allTags?.FocalLengthIn35mmFilm,
+                                    Make: allTags?.Make, 
+                                    Model: allTags?.Model, 
+                                    FNumber: allTags?.FNumber,
+                                    ExposureTime: allTags?.ExposureTime, 
+                                    ISOSpeedRatings: allTags?.ISOSpeedRatings,
+                                    FocalLength: allTags?.FocalLength,
+                                    FocalLengthIn35mmFilm: allTags?.FocalLengthIn35mmFilm,
                                     DateTimeOriginal: allTags?.DateTimeOriginal,
                                 };
                                 draw(exifData);
@@ -203,7 +269,7 @@
 
                 if (cfg.showSettings) {
                     const parts = [];
-                    const flString = formatFocalLength(exif.FocalLength, exif.FocalLengthIn35mmFilm, exif.Make);
+                    const flString = formatFocalLength(exif.FocalLength, exif.FocalLengthIn35mmFilm, exif.Make, exif.Model);
                     if (flString) parts.push(flString);
                     if (exif.FNumber) parts.push(formatFNumber(exif.FNumber));
                     if (exif.ExposureTime) parts.push(formatExposureTime(exif.ExposureTime));
