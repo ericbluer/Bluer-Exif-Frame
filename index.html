@@ -5,16 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Bluer Exif Frame</title>
     
-    <!-- === CẤU HÌNH PWA CHO IPHONE (QUAN TRỌNG) === -->
+    <!-- === CẤU HÌNH PWA CHO IPHONE === -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Bluer Frame">
     <meta name="theme-color" content="#ffffff">
 
-    <!-- === ICON MỚI (ĐỊNH DẠNG PNG) === -->
-    <!-- Đây là link ảnh PNG máy ảnh màu xanh, iOS sẽ hiển thị đúng -->
-    <link rel="apple-touch-icon" href="https://img.icons8.com/ios-filled/500/2563eb/camera--v1.png">
-    <link rel="icon" type="image/png" href="https://img.icons8.com/ios-filled/500/2563eb/camera--v1.png">
+    <!-- === CẤU HÌNH ICON MỚI === -->
+    <!-- App sẽ tự động tìm file icon.png nằm cùng thư mục -->
+    <link rel="apple-touch-icon" href="./icon.png">
+    <link rel="icon" type="image/png" href="./icon.png">
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -32,7 +32,6 @@
             overscroll-behavior-y: none; /* Chặn kéo nảy trang */
             -webkit-tap-highlight-color: transparent;
             font-family: -apple-system, BlinkMacSystemFont, "Montserrat", "Segoe UI", Roboto, sans-serif;
-            /* Vùng an toàn cho iPhone tai thỏ/dynamic island */
             padding-top: env(safe-area-inset-top);
             padding-bottom: env(safe-area-inset-bottom);
             background-color: #f9fafb;
@@ -69,7 +68,7 @@
             Loader2: (p) => <svg className={`${p.className} animate-spin`} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
         };
 
-        // --- Xử lý Format Thông số ---
+        // --- Helpers ---
         const formatExposureTime = (time) => {
             if (!time) return '';
             if (time >= 1) return time.toString();
@@ -90,32 +89,19 @@
             if (mo.toLowerCase().startsWith(m.toLowerCase())) mo = mo.substring(m.length).trim();
             return `${m} ${mo}`.trim();
         };
-
-        // --- Logic Quy đổi tiêu cự (Yêu cầu mới) ---
         const formatFocalLength = (fl, fl35, make = '') => {
-            // Ưu tiên 1: Lấy tag 35mm có sẵn trong ảnh
             if (fl35 && fl35 > 0) return `${Math.round(fl35)}mm`;
-            
-            // Ưu tiên 2: Tự tính toán dựa trên tên hãng máy
             if (fl) {
                 const m = make.toLowerCase();
-                // Fujifilm, Sony APS-C, Nikon DX -> Crop 1.5x
-                if (m.includes('fujifilm') || m.includes('nikon') || m.includes('sony')) {
-                    // (Lưu ý: Sony/Nikon có cả Fullframe, nhưng nếu không có tag fl35 thì thường là máy cũ hoặc crop. 
-                    // Đây là ước lượng tốt nhất nếu thiếu data).
-                    return `${Math.round(fl * 1.5)}mm`; 
-                }
-                // Olympus, Panasonic -> Crop 2.0x
+                if (m.includes('fujifilm') || m.includes('nikon') || m.includes('sony')) return `${Math.round(fl * 1.5)}mm`;
                 if (m.includes('olympus') || m.includes('panasonic')) return `${Math.round(fl * 2.0)}mm`;
-                // Canon APS-C -> Crop 1.6x
-                if (m.includes('canon')) return `${Math.round(fl * 1.6)}mm`; // Canon thường là 1.6
-                
-                // Mặc định: Giữ nguyên
+                if (m.includes('canon')) return `${Math.round(fl * 1.6)}mm`;
                 return `${Math.round(fl)}mm`;
             }
             return '';
         };
 
+        // --- Main App ---
         function App() {
             const [images, setImages] = useState([]);
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -170,25 +156,18 @@
                             }
                             resolve();
                         };
-                        
                         if (window.EXIF) {
                             window.EXIF.getData(originalImg, function() {
                                 const allTags = window.EXIF.getAllTags(this);
                                 const exifData = {
-                                    Make: allTags?.Make, 
-                                    Model: allTags?.Model, 
-                                    FNumber: allTags?.FNumber,
-                                    ExposureTime: allTags?.ExposureTime, 
-                                    ISOSpeedRatings: allTags?.ISOSpeedRatings,
-                                    FocalLength: allTags?.FocalLength,
-                                    FocalLengthIn35mmFilm: allTags?.FocalLengthIn35mmFilm, // Lấy tag 35mm
+                                    Make: allTags?.Make, Model: allTags?.Model, FNumber: allTags?.FNumber,
+                                    ExposureTime: allTags?.ExposureTime, ISOSpeedRatings: allTags?.ISOSpeedRatings,
+                                    FocalLength: allTags?.FocalLength, FocalLengthIn35mmFilm: allTags?.FocalLengthIn35mmFilm,
                                     DateTimeOriginal: allTags?.DateTimeOriginal,
                                 };
                                 draw(exifData);
                             });
-                        } else { 
-                            draw({}); 
-                        }
+                        } else { draw({}); }
                     };
                 });
             };
@@ -224,10 +203,8 @@
 
                 if (cfg.showSettings) {
                     const parts = [];
-                    // Xử lý tiêu cự 35mm ở đây
                     const flString = formatFocalLength(exif.FocalLength, exif.FocalLengthIn35mmFilm, exif.Make);
                     if (flString) parts.push(flString);
-                    
                     if (exif.FNumber) parts.push(formatFNumber(exif.FNumber));
                     if (exif.ExposureTime) parts.push(formatExposureTime(exif.ExposureTime));
                     if (exif.ISOSpeedRatings) parts.push(formatISO(exif.ISOSpeedRatings));
