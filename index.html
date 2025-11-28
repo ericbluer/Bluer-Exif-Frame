@@ -13,7 +13,6 @@
     <link rel="apple-touch-icon" href="./icon.png">
     <link rel="icon" type="image/png" href="./icon.png">
 
-    <!-- Tailwind & Libs -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -43,7 +42,6 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // --- DATABASE CROP FACTOR ---
         const CAMERA_DB = {
             'rx100': 2.7, 'zv-1': 2.7, 'rx10': 2.7, 'rx1': 1.0,
             'g7 x': 2.7, 'g5 x': 2.7, 'g9 x': 2.7, 's100': 4.6, 's110': 4.6, 's120': 4.6, 'ixus': 5.6,
@@ -54,7 +52,6 @@
             'coolpix a': 1.5, 'p900': 5.6, 'p1000': 5.6, '1 j': 2.7, '1 v': 2.7,
         };
 
-        // --- Icons ---
         const Icon = ({ path, className }) => (
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d={path} /></svg>
         );
@@ -73,7 +70,7 @@
             Info: (p) => <Icon {...p} path="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
         };
 
-        // --- Helpers ---
+        // --- Format Helpers ---
         const formatExposureTime = (time) => {
             if (!time) return '';
             if (time >= 1) return time.toString();
@@ -86,15 +83,7 @@
             }
             return best.endsWith('s') ? best : `1/${Math.round(1/time)}s`;
         };
-
-        // UPDATED: Logic làm tròn số F-Number
-        const formatFNumber = (f) => {
-            if (!f) return '';
-            // Làm tròn 1 chữ số thập phân (1.779 -> 1.8)
-            const val = Math.round(f * 10) / 10;
-            return `f/${val}`;
-        };
-
+        const formatFNumber = (f) => f ? `f/${Math.round(f * 10) / 10}` : '';
         const formatISO = (iso) => iso ? `ISO ${iso}` : '';
         const cleanModelName = (make, model) => {
             const m = String(make || '').replace(/\0/g, '').trim();
@@ -196,7 +185,6 @@
                     const originalImg = new Image();
                     originalImg.crossOrigin = "Anonymous";
                     originalImg.src = imgItem.previewUrl;
-                    
                     originalImg.onload = () => {
                         const finalCanvas = document.createElement('canvas');
                         const finalCtx = finalCanvas.getContext('2d');
@@ -216,44 +204,59 @@
 
             const reProcessAll = () => { if(images.length > 0) processQueue(images); };
 
+            // --- RE-ENGINEERED DRAWING LOGIC (PERFECT SYMMETRY) ---
             const drawFrameOnCanvas = (canvas, ctx, sourceImg, exif, cfg) => {
                 const sourceW = sourceImg.naturalWidth || sourceImg.width;
                 const sourceH = sourceImg.naturalHeight || sourceImg.height;
                 if (!sourceW || !sourceH) return;
 
                 const shortSide = Math.min(sourceW, sourceH);
-                const baseP = Math.floor(shortSide * (cfg.borderWidthPercent / 100));
                 
+                // 1. Force Left = Right = Top = Base Padding
+                const baseP = Math.floor(shortSide * (cfg.borderWidthPercent / 100));
+                let sideP = baseP;
+                let topP = baseP;
+
+                // 2. Calculate Target Dimensions
                 const isLandscape = sourceW > sourceH;
-                const targetRatio = isLandscape ? 5/4 : 4/5; 
-                let wOut = sourceW + (baseP * 2);
-                let hOut = wOut / targetRatio;
-                let calcBottom = hOut - sourceH - baseP;
+                const targetRatio = isLandscape ? 5/4 : 4/5; // 1.25 or 0.8
+
+                // 3. Set Canvas Width directly from Source + 2*SidePadding
+                // This guarantees Side Padding is EXACTLY what we want relative to image width.
+                let canvasW = sourceW + (sideP * 2);
+                
+                // 4. Calculate Canvas Height from Ratio
+                let canvasH = canvasW / targetRatio;
+
+                // 5. Calculate resulting Bottom Padding
+                let bottomP = canvasH - sourceH - topP;
+
+                // 6. Check if Bottom is sufficient
                 const minBottomRequired = Math.floor(shortSide * (cfg.bottomPaddingPercent / 100));
 
-                let canvasW, canvasH, topP, bottomP, sideP;
-
-                if (calcBottom >= minBottomRequired) {
-                    canvasW = wOut;
-                    canvasH = hOut;
-                    topP = baseP;
-                    sideP = baseP;
-                    bottomP = calcBottom; 
-                } else {
-                    let hOutFixed = sourceH + baseP + minBottomRequired;
+                if (bottomP < minBottomRequired) {
+                    // EDGE CASE: Image is too tall/long for the aspect ratio.
+                    // We must expand the height to fit the bottom padding.
+                    // To keep aspect ratio, we must ALSO expand width.
+                    // This means Side Padding will increase (Side > Top), but Side Left = Side Right always.
+                    
+                    let hOutFixed = sourceH + topP + minBottomRequired;
                     let wOutFixed = hOutFixed * targetRatio;
+                    
                     canvasH = hOutFixed;
                     canvasW = wOutFixed;
-                    topP = baseP;
                     bottomP = minBottomRequired;
                     sideP = (canvasW - sourceW) / 2;
                 }
-                
+
+                // 7. Draw
                 canvas.width = canvasW;
                 canvas.height = canvasH;
 
                 ctx.fillStyle = cfg.backgroundColor;
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
+                
+                // Use floor to prevent sub-pixel blur
                 ctx.drawImage(sourceImg, Math.floor(sideP), Math.floor(topP), sourceW, sourceH);
 
                 ctx.fillStyle = cfg.textColor;
@@ -365,9 +368,7 @@
                         {images.length === 0 ? (
                             <div className="flex flex-col items-center justify-center h-[60vh] text-gray-400 border-2 border-dashed border-gray-300 rounded-2xl bg-white/50" onClick={() => libsLoaded && document.querySelector('input[type=file]')?.click()}>
                                 <Icons.ImageIcon className="w-12 h-12 mb-3 text-gray-300" />
-                                <p className="font-medium">
-                                    {libsLoaded ? "Chạm để thêm ảnh" : "Đang tải thư viện..."}
-                                </p>
+                                <p className="font-medium">{libsLoaded ? "Chạm để thêm ảnh" : "Đang tải thư viện..."}</p>
                             </div>
                         ) : (
                             <div className="flex flex-col gap-6">
