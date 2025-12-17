@@ -13,6 +13,7 @@
     <link rel="apple-touch-icon" href="./icon.png">
     <link rel="icon" type="image/png" href="./icon.png">
 
+    <!-- Tailwind & Libs -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
@@ -34,13 +35,17 @@
             flex-direction: column;
         }
         @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;700&display=swap');
+        
+        /* Custom Scrollbar for Modal */
+        .modal-scroll::-webkit-scrollbar { width: 4px; }
+        .modal-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
     </style>
 </head>
 <body>
     <div id="root" class="flex-1 flex flex-col h-full overflow-hidden"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useRef } = React;
 
         const CAMERA_DB = {
             'rx100': 2.7, 'zv-1': 2.7, 'rx10': 2.7, 'rx1': 1.0,
@@ -67,12 +72,16 @@
             AlertCircle: (p) => <Icon {...p} path="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />,
             FolderDown: (p) => <Icon {...p} path="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2v11z M12 11v6 M9 14l3 3 3-3" />,
             Loader2: (p) => <svg className={`${p.className} animate-spin`} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>,
-            Info: (p) => <Icon {...p} path="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            Info: (p) => <Icon {...p} path="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />,
+            Edit: (p) => <Icon {...p} path="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7 M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
         };
 
-        // --- Format Helpers ---
+        // --- Helpers ---
         const formatExposureTime = (time) => {
             if (!time) return '';
+            // If user enters "1/200" string manually, return as is
+            if (typeof time === 'string' && time.includes('/')) return time;
+            
             if (time >= 1) return time.toString();
             const common = [2, 4, 8, 15, 30, 60, 125, 250, 500, 1000, 2000, 4000, 8000];
             let best = `1/${Math.round(1/time)}`;
@@ -83,15 +92,38 @@
             }
             return best.endsWith('s') ? best : `1/${Math.round(1/time)}s`;
         };
-        const formatFNumber = (f) => f ? `f/${Math.round(f * 10) / 10}` : '';
-        const formatISO = (iso) => iso ? `ISO ${iso}` : '';
+        
+        const formatFNumber = (f) => {
+            if (!f) return '';
+            // Handle string input "f/1.8" or "1.8"
+            if (typeof f === 'string') {
+                if (f.startsWith('f/')) return f;
+                // Try parse if it's a number string
+                const num = parseFloat(f);
+                if (!isNaN(num)) return `f/${num}`;
+                return f;
+            }
+            const val = Math.round(f * 10) / 10;
+            return `f/${val}`;
+        };
+
+        const formatISO = (iso) => {
+            if (!iso) return '';
+            if (String(iso).toLowerCase().startsWith('iso')) return iso;
+            return `ISO ${iso}`;
+        };
+
         const cleanModelName = (make, model) => {
             const m = String(make || '').replace(/\0/g, '').trim();
             let mo = String(model || '').replace(/\0/g, '').trim();
             if (mo.toLowerCase().startsWith(m.toLowerCase())) mo = mo.substring(m.length).trim();
             return `${m} ${mo}`.trim();
         };
+
         const formatFocalLength = (fl, fl35, make, model) => {
+            // Manual overrides might be strings, pass them through
+            if (typeof fl === 'string' && fl.includes('mm')) return fl;
+            
             if (fl35 && fl35 > 0) return `${Math.round(fl35)}mm`;
             if (fl) {
                 const mStr = (String(make || '') + ' ' + String(model || '')).toLowerCase();
@@ -110,9 +142,15 @@
         function App() {
             const [images, setImages] = useState([]);
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+            const [editingExifId, setEditingExifId] = useState(null); // ID of image being edited manually
             const [activeTab, setActiveTab] = useState('layout');
             const [libsLoaded, setLibsLoaded] = useState(false);
             
+            // Manual Input State
+            const [manualForm, setManualForm] = useState({
+                make: '', model: '', focalLength: '', aperture: '', shutter: '', iso: '', date: ''
+            });
+
             const [settings, setSettings] = useState({
                 borderWidthPercent: 15,
                 bottomPaddingPercent: 20,
@@ -144,6 +182,7 @@
                         finalUrl: null,
                         exif: null,
                         status: 'pending',
+                        manualExif: null // New field for user overrides
                     }));
                     setImages(prev => [...prev, ...newImages]);
                     setTimeout(() => processQueue(newImages), 100);
@@ -160,31 +199,37 @@
                 setImages(prev => prev.map(img => img.id === imgItem.id ? { ...img, status: 'processing' } : img));
                 
                 let extractedExif = null;
-                try {
-                    const arrayBuffer = await new Promise((resolve, reject) => {
-                        const reader = new FileReader();
-                        reader.onload = e => resolve(e.target.result);
-                        reader.onerror = reject;
-                        reader.readAsArrayBuffer(imgItem.file);
-                    });
+                // If manual data exists, skip extraction
+                if (imgItem.manualExif) {
+                    extractedExif = imgItem.manualExif;
+                } else {
+                    try {
+                        const arrayBuffer = await new Promise((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = e => resolve(e.target.result);
+                            reader.onerror = reject;
+                            reader.readAsArrayBuffer(imgItem.file);
+                        });
 
-                    if (window.EXIF) {
-                        const tags = window.EXIF.readFromBinaryFile(arrayBuffer);
-                        if (tags && (tags.Make || tags.Model || tags.FocalLength)) {
-                            extractedExif = {
-                                Make: tags.Make, Model: tags.Model, FNumber: tags.FNumber,
-                                ExposureTime: tags.ExposureTime, ISOSpeedRatings: tags.ISOSpeedRatings,
-                                FocalLength: tags.FocalLength, FocalLengthIn35mmFilm: tags.FocalLengthIn35mmFilm,
-                                DateTimeOriginal: tags.DateTimeOriginal,
-                            };
+                        if (window.EXIF) {
+                            const tags = window.EXIF.readFromBinaryFile(arrayBuffer);
+                            if (tags && (tags.Make || tags.Model || tags.FocalLength)) {
+                                extractedExif = {
+                                    Make: tags.Make, Model: tags.Model, FNumber: tags.FNumber,
+                                    ExposureTime: tags.ExposureTime, ISOSpeedRatings: tags.ISOSpeedRatings,
+                                    FocalLength: tags.FocalLength, FocalLengthIn35mmFilm: tags.FocalLengthIn35mmFilm,
+                                    DateTimeOriginal: tags.DateTimeOriginal,
+                                };
+                            }
                         }
-                    }
-                } catch (err) { console.error("EXIF error", err); }
+                    } catch (err) { console.error("EXIF error", err); }
+                }
 
                 return new Promise((resolve) => {
                     const originalImg = new Image();
                     originalImg.crossOrigin = "Anonymous";
                     originalImg.src = imgItem.previewUrl;
+                    
                     originalImg.onload = () => {
                         const finalCanvas = document.createElement('canvas');
                         const finalCtx = finalCanvas.getContext('2d');
@@ -204,59 +249,96 @@
 
             const reProcessAll = () => { if(images.length > 0) processQueue(images); };
 
-            // --- RE-ENGINEERED DRAWING LOGIC (PERFECT SYMMETRY) ---
+            // --- MANUAL EXIF HANDLERS ---
+            const openManualEdit = (img) => {
+                setEditingExifId(img.id);
+                // Pre-fill form with existing data or empty
+                const data = img.exif || {};
+                setManualForm({
+                    make: data.Make || '',
+                    model: data.Model || '',
+                    focalLength: data.FocalLengthIn35mmFilm || data.FocalLength || '',
+                    aperture: data.FNumber || '',
+                    shutter: data.ExposureTime ? (data.ExposureTime < 1 ? `1/${Math.round(1/data.ExposureTime)}` : data.ExposureTime) : '',
+                    iso: data.ISOSpeedRatings || '',
+                    date: data.DateTimeOriginal ? data.DateTimeOriginal.split(' ')[0].replace(/:/g, '-') : ''
+                });
+            };
+
+            const saveManualExif = () => {
+                const imgIndex = images.findIndex(i => i.id === editingExifId);
+                if (imgIndex === -1) return;
+
+                // Create a manual exif object
+                // We convert strings back to appropriate types where needed, or keep as strings for flexibilty
+                // Since our formatters handle strings, we can keep them mostly as is.
+                const newExif = {
+                    Make: manualForm.make,
+                    Model: manualForm.model,
+                    // If user typed "1.8", it's a string "1.8". formatFNumber handles it.
+                    FNumber: manualForm.aperture, 
+                    ExposureTime: manualForm.shutter, 
+                    ISOSpeedRatings: manualForm.iso,
+                    // Special case: Focal length. If user types "35", we treat it as 35mm equivalent directly.
+                    FocalLengthIn35mmFilm: manualForm.focalLength,
+                    FocalLength: 0, // Ignore physical if manual
+                    DateTimeOriginal: manualForm.date ? manualForm.date.replace(/-/g, ':') + " 00:00:00" : ''
+                };
+
+                const updatedImage = { ...images[imgIndex], manualExif: newExif };
+                
+                // Update state immediately to reflect "Processing"
+                setImages(prev => {
+                    const next = [...prev];
+                    next[imgIndex] = { ...updatedImage, status: 'processing' };
+                    return next;
+                });
+                
+                setEditingExifId(null);
+                
+                // Trigger re-process for this single image
+                processSingleImage(updatedImage);
+            };
+
+            // --- DRAWING LOGIC ---
             const drawFrameOnCanvas = (canvas, ctx, sourceImg, exif, cfg) => {
                 const sourceW = sourceImg.naturalWidth || sourceImg.width;
                 const sourceH = sourceImg.naturalHeight || sourceImg.height;
                 if (!sourceW || !sourceH) return;
 
                 const shortSide = Math.min(sourceW, sourceH);
-                
-                // 1. Force Left = Right = Top = Base Padding
                 const baseP = Math.floor(shortSide * (cfg.borderWidthPercent / 100));
-                let sideP = baseP;
-                let topP = baseP;
-
-                // 2. Calculate Target Dimensions
-                const isLandscape = sourceW > sourceH;
-                const targetRatio = isLandscape ? 5/4 : 4/5; // 1.25 or 0.8
-
-                // 3. Set Canvas Width directly from Source + 2*SidePadding
-                // This guarantees Side Padding is EXACTLY what we want relative to image width.
-                let canvasW = sourceW + (sideP * 2);
                 
-                // 4. Calculate Canvas Height from Ratio
-                let canvasH = canvasW / targetRatio;
-
-                // 5. Calculate resulting Bottom Padding
-                let bottomP = canvasH - sourceH - topP;
-
-                // 6. Check if Bottom is sufficient
+                const isLandscape = sourceW > sourceH;
+                const targetRatio = isLandscape ? 5/4 : 4/5; 
+                let wOut = sourceW + (baseP * 2);
+                let hOut = wOut / targetRatio;
+                let calcBottom = hOut - sourceH - baseP;
                 const minBottomRequired = Math.floor(shortSide * (cfg.bottomPaddingPercent / 100));
 
-                if (bottomP < minBottomRequired) {
-                    // EDGE CASE: Image is too tall/long for the aspect ratio.
-                    // We must expand the height to fit the bottom padding.
-                    // To keep aspect ratio, we must ALSO expand width.
-                    // This means Side Padding will increase (Side > Top), but Side Left = Side Right always.
-                    
-                    let hOutFixed = sourceH + topP + minBottomRequired;
+                let canvasW, canvasH, topP, bottomP, sideP;
+
+                if (calcBottom >= minBottomRequired) {
+                    canvasW = wOut;
+                    canvasH = hOut;
+                    topP = baseP;
+                    sideP = baseP;
+                    bottomP = calcBottom; 
+                } else {
+                    let hOutFixed = sourceH + baseP + minBottomRequired;
                     let wOutFixed = hOutFixed * targetRatio;
-                    
                     canvasH = hOutFixed;
                     canvasW = wOutFixed;
+                    topP = baseP;
                     bottomP = minBottomRequired;
                     sideP = (canvasW - sourceW) / 2;
                 }
-
-                // 7. Draw
+                
                 canvas.width = canvasW;
                 canvas.height = canvasH;
 
                 ctx.fillStyle = cfg.backgroundColor;
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
-                
-                // Use floor to prevent sub-pixel blur
                 ctx.drawImage(sourceImg, Math.floor(sideP), Math.floor(topP), sourceW, sourceH);
 
                 ctx.fillStyle = cfg.textColor;
@@ -377,7 +459,7 @@
                                     <p className="text-xs text-blue-800 leading-snug">Mẹo: Chọn <b>Lưu hình ảnh</b> khi chia sẻ để lưu về Photos.</p>
                                 </div>
                                 {images.map((img) => (
-                                    <div key={img.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
+                                    <div key={img.id} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative group">
                                         <div className="relative bg-gray-100 flex items-center justify-center min-h-[200px]">
                                             {img.status === 'processing' && <div className="absolute inset-0 bg-white/80 z-10 flex items-center justify-center"><Icons.Loader2 className="w-8 h-8 text-blue-600" /></div>}
                                             <img src={img.finalUrl || img.previewUrl} className={`w-full h-auto object-contain ${!img.finalUrl ? 'opacity-50' : ''}`} />
@@ -386,7 +468,22 @@
                                             <div className="flex justify-between items-center mb-3">
                                                 <div className="flex-1 overflow-hidden mr-2">
                                                     <p className="text-xs font-bold truncate text-gray-700">{img.file.name}</p>
-                                                    {img.status === 'done' && !img.exif && <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded mt-1 border border-amber-100"><Icons.AlertCircle className="w-3 h-3" /> Không tìm thấy EXIF</span>}
+                                                    {/* Trạng thái EXIF */}
+                                                    {img.status === 'done' && !img.exif && !img.manualExif && (
+                                                        <button 
+                                                            onClick={() => openManualEdit(img)}
+                                                            className="flex items-center gap-1 text-[10px] text-blue-600 bg-blue-50 px-2 py-1 rounded mt-1 border border-blue-100 font-bold active:bg-blue-100"
+                                                        >
+                                                            <Icons.Edit className="w-3 h-3" />
+                                                            Nhập thông tin
+                                                        </button>
+                                                    )}
+                                                    {/* Nút sửa EXIF (hiện khi có data) */}
+                                                    {img.status === 'done' && (img.exif || img.manualExif) && (
+                                                        <button onClick={() => openManualEdit(img)} className="text-xs text-gray-400 flex items-center gap-1 mt-1 hover:text-blue-600">
+                                                            <Icons.Edit className="w-3 h-3" /> Sửa thông số
+                                                        </button>
+                                                    )}
                                                 </div>
                                                 <button onClick={() => setImages(prev => prev.filter(i => i.id !== img.id))} className="text-gray-400 p-2 -mr-2 active:text-red-500"><Icons.Trash2 className="w-5 h-5" /></button>
                                             </div>
@@ -397,6 +494,54 @@
                             </div>
                         )}
                     </main>
+
+                    {/* MODAL EDIT EXIF */}
+                    {editingExifId && (
+                        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+                            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setEditingExifId(null)}></div>
+                            <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl relative z-10 flex flex-col max-h-[90vh]">
+                                <div className="p-4 border-b flex justify-between items-center">
+                                    <h3 className="font-bold text-lg">Nhập thông số thủ công</h3>
+                                    <button onClick={() => setEditingExifId(null)} className="p-2 bg-gray-100 rounded-full"><Icons.X className="w-4 h-4" /></button>
+                                </div>
+                                <div className="p-4 overflow-y-auto modal-scroll space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="col-span-2">
+                                            <label className="text-xs font-bold text-gray-500 mb-1 block">Hãng máy (Make)</label>
+                                            <input type="text" value={manualForm.make} onChange={(e) => setManualForm({...manualForm, make: e.target.value})} className="w-full p-2 border rounded-lg text-sm" placeholder="Sony, Canon..." />
+                                        </div>
+                                        <div className="col-span-2">
+                                            <label className="text-xs font-bold text-gray-500 mb-1 block">Tên máy (Model)</label>
+                                            <input type="text" value={manualForm.model} onChange={(e) => setManualForm({...manualForm, model: e.target.value})} className="w-full p-2 border rounded-lg text-sm" placeholder="A7III, iPhone 14..." />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-500 mb-1 block">Tiêu cự (mm)</label>
+                                            <input type="text" value={manualForm.focalLength} onChange={(e) => setManualForm({...manualForm, focalLength: e.target.value})} className="w-full p-2 border rounded-lg text-sm" placeholder="35, 50, 85..." />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-500 mb-1 block">Khẩu độ (F)</label>
+                                            <input type="text" value={manualForm.aperture} onChange={(e) => setManualForm({...manualForm, aperture: e.target.value})} className="w-full p-2 border rounded-lg text-sm" placeholder="1.8, 2.8..." />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-500 mb-1 block">Tốc độ (s)</label>
+                                            <input type="text" value={manualForm.shutter} onChange={(e) => setManualForm({...manualForm, shutter: e.target.value})} className="w-full p-2 border rounded-lg text-sm" placeholder="1/200..." />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-500 mb-1 block">ISO</label>
+                                            <input type="text" value={manualForm.iso} onChange={(e) => setManualForm({...manualForm, iso: e.target.value})} className="w-full p-2 border rounded-lg text-sm" placeholder="100, 800..." />
+                                        </div>
+                                        <div className="col-span-2">
+                                            <label className="text-xs font-bold text-gray-500 mb-1 block">Ngày chụp</label>
+                                            <input type="date" value={manualForm.date} onChange={(e) => setManualForm({...manualForm, date: e.target.value})} className="w-full p-2 border rounded-lg text-sm" />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="p-4 border-t bg-gray-50 rounded-b-2xl">
+                                    <button onClick={saveManualExif} className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold shadow active:scale-95 transition-transform">Lưu & Cập nhật</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-2 pb-safe z-40 flex justify-around items-center shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                         <button onClick={() => setIsSettingsOpen(!isSettingsOpen)} className={`flex flex-col items-center gap-1 p-2 rounded-lg flex-1 active:bg-gray-50 ${isSettingsOpen ? 'text-blue-600' : 'text-gray-500'}`}><Icons.Settings className="w-6 h-6" /><span className="text-[10px] font-medium">Cấu hình</span></button>
